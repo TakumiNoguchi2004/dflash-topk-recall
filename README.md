@@ -43,6 +43,8 @@ curve.
 
 ## Results (run: v1, MT-Bench, 80 prompts)
 
+![recall@k of the verifier's token within DFlash's drafter top-k](docs/img/recall_at_k.png)
+
 | k | recall@k (post-reject) | recall@k (pre-reject) |
 |---|---|---|
 | 1 | 0.207 | 1.000 |
