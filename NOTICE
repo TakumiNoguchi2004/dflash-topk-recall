@@ -1,0 +1,22 @@
+dflash-topk-recall
+Copyright 2026 the repository author(s)
+
+This project is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This directory vendors DFlash's own model/generation code to run this
+experiment's instrumented drafter:
+
+* vendor/dflash/ -- from DFlash, MIT License.
+  License copy: vendor/dflash/LICENSE
+  Chen, Jian; Liang, Yesheng; Liu, Zhijian. "DFlash: Block Diffusion for
+  Flash Speculative Decoding." arXiv preprint arXiv:2602.06036, 2026.
+
+  MODIFIED from upstream: model.py's dflash_generate() gained an optional
+  `return_topk_recall` argument that additionally records, per draft round,
+  the rank of the verifier's per-position token within the drafter's own
+  logit ordering at every block position. No other behavior changes; with
+  return_topk_recall left at its default (False), generation is identical
+  to upstream.
+
+data/mtbench_subset.jsonl is a small subset of MT-Bench prompts (prompt
+text only, no third-party generations or annotations).
