@@ -63,6 +63,39 @@ give or take the never-checked positions past the reject slot), 88.0% have
 it somewhere in the top 64 -- out of a vocabulary of ~128k. Most rejections
 are near-misses, not wild mispredictions.
 
+## Results (run: qwen3.5-4b-v1, MT-Bench, 80 prompts)
+
+Same methodology, rerun against a second, more recent target/drafter pair --
+`Qwen/Qwen3.5-4B` + `z-lab/Qwen3.5-4B-DFlash` -- to check whether xPress's
+claim holds outside the original LLaMA-3.1 setup. Qwen3.5-4B's hybrid
+linear-attention/full-attention backbone needed a small fix to how the
+target's KV-cache is rolled back after a rejected draft block (see
+`vendor/dflash/model.py`'s `DynamicCache(config=...)` +
+`activate_past_recording()` -- plain `DynamicCache()` can't be cropped back
+for linear-attention layers without it).
+
+![recall@k of the verifier's token within DFlash's drafter top-k, Qwen3.5-4B vs LLaMA-3.1-8B](docs/img/recall_at_k_comparison.png)
+
+| k | recall@k (post-reject), Qwen3.5-4B | recall@k (post-reject), LLaMA-3.1-8B (v1) |
+|---|---|---|
+| 1 | 0.419 | 0.207 |
+| 2 | 0.587 | 0.370 |
+| 4 | 0.726 | 0.510 |
+| 8 | 0.829 | 0.633 |
+| 16 | 0.894 | 0.739 |
+| 32 | 0.937 | 0.822 |
+| 64 | 0.960 | 0.880 |
+
+n_post_reject = 26,795 positions, n_pre_reject = 21,400 positions.
+
+Same qualitative pattern as v1, and containment is higher at every k --
+Qwen3.5-4B's drafter's top-1 alone matches the verifier twice as often
+(41.9% vs 20.7%), and by k=64 covers 96.0% of post-reject positions. Not a
+controlled comparison (different model family, drafter size, and training
+data), but it's further evidence the near-miss pattern xPress describes
+isn't specific to one drafter/target pair. See "Reproducing" below for the
+command.
+
 ## Future work
 
 Containment alone doesn't buy speedup -- something has to actually surface
@@ -82,15 +115,20 @@ natural directions:
 python scripts/run_dflash_topk_recall.py --run-name v1
 python scripts/analyze_dflash_topk_recall.py --run-name v1
 # open results/v1/dflash_topk_recall_report.html (e.g. via VS Code preview)
+
+# second target/drafter pair (see "Results (run: qwen3.5-4b-v1)" above)
+python scripts/run_dflash_topk_recall.py --run-name qwen3.5-4b-v1 \
+    --target-path Qwen/Qwen3.5-4B --dflash-checkpoint z-lab/Qwen3.5-4B-DFlash
+python scripts/analyze_dflash_topk_recall.py --run-name qwen3.5-4b-v1
 ```
 
 Target/drafter checkpoints are referenced by HF repo id and auto-download on
 first run:
 
-| | HF repo id |
-|---|---|
-| target | `meta-llama/Llama-3.1-8B-Instruct` |
-| DFlash drafter | `z-lab/LLaMA3.1-8B-Instruct-DFlash-UltraChat` |
+| run | target | DFlash drafter |
+|---|---|---|
+| v1 | `meta-llama/Llama-3.1-8B-Instruct` | `z-lab/LLaMA3.1-8B-Instruct-DFlash-UltraChat` |
+| qwen3.5-4b-v1 | `Qwen/Qwen3.5-4B` | `z-lab/Qwen3.5-4B-DFlash` |
 
 `data/mtbench_subset.jsonl` is a small MT-Bench prompt subset (prompts only,
 no third-party generations).
