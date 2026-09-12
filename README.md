@@ -41,38 +41,7 @@ for the instrumented generation loop, and `scripts/analyze_dflash_topk_recall.py
 for how ranks get split into pre-/post-reject and turned into the recall@k
 curve.
 
-## Results (run: llama3.1-8b, MT-Bench, 80 prompts)
-
-![recall@k of the verifier's token within DFlash's drafter top-k](docs/img/recall_at_k.png)
-
-| k | recall@k (post-reject) | recall@k (pre-reject) |
-|---|---|---|
-| 1 | 0.207 | 1.000 |
-| 2 | 0.370 | 1.000 |
-| 4 | 0.510 | 1.000 |
-| 8 | 0.633 | 1.000 |
-| 16 | 0.739 | 1.000 |
-| 32 | 0.822 | 1.000 |
-| 64 | 0.880 | 1.000 |
-
-n_post_reject = 34,250 positions, n_pre_reject = 14,026 positions.
-
-Matches xPress's claim: even though only 20.7% of post-reject positions have
-the verifier's token as the drafter's top-1 (that's what "rejected" means,
-give or take the never-checked positions past the reject slot), 88.0% have
-it somewhere in the top 64 -- out of a vocabulary of ~128k. Most rejections
-are near-misses, not wild mispredictions.
-
-## Results (run: qwen3.5-4b, MT-Bench, 80 prompts)
-
-Same methodology, rerun against a second, more recent target/drafter pair --
-`Qwen/Qwen3.5-4B` + `z-lab/Qwen3.5-4B-DFlash` -- to check whether xPress's
-claim holds outside the original LLaMA-3.1 setup. Qwen3.5-4B's hybrid
-linear-attention/full-attention backbone needed a small fix to how the
-target's KV-cache is rolled back after a rejected draft block (see
-`vendor/dflash/model.py`'s `DynamicCache(config=...)` +
-`activate_past_recording()` -- plain `DynamicCache()` can't be cropped back
-for linear-attention layers without it).
+## Results (MT-Bench, 80 prompts)
 
 ![recall@k of the verifier's token within DFlash's drafter top-k, Qwen3.5-4B vs LLaMA-3.1-8B](docs/img/recall_at_k_comparison.png)
 
@@ -86,15 +55,20 @@ for linear-attention layers without it).
 | 32 | 0.937 | 0.822 |
 | 64 | 0.960 | 0.880 |
 
-n_post_reject = 26,795 positions, n_pre_reject = 21,400 positions.
+qwen3.5-4b: n_post_reject = 26,795, n_pre_reject = 21,400. llama3.1-8b:
+n_post_reject = 34,250, n_pre_reject = 14,026. (pre-reject recall@k is
+trivially 1.000 for both -- see "Method" -- so it's omitted from the table
+above; kept in each run's own `results/<run>/dflash_topk_recall.csv`.)
 
-Same qualitative pattern as llama3.1-8b, and containment is higher at every k --
-Qwen3.5-4B's drafter's top-1 alone matches the verifier twice as often
-(41.9% vs 20.7%), and by k=64 covers 96.0% of post-reject positions. Not a
-controlled comparison (different model family, drafter size, and training
-data), but it's further evidence the near-miss pattern xPress describes
-isn't specific to one drafter/target pair. See "Reproducing" below for the
-command.
+Matches xPress's claim on both models: even though only 20.7-41.9% of
+post-reject positions have the verifier's token as the drafter's top-1
+(that's what "rejected" means, give or take the never-checked positions past
+the reject slot), 88.0-96.0% have it somewhere in the top 64 -- out of a
+vocabulary of ~128k-248k. Most rejections are near-misses, not wild
+mispredictions. Qwen3.5-4B's drafter's top-1 alone matches the verifier
+roughly twice as often as LLaMA-3.1-8B's; not a controlled comparison
+(different model family, drafter size, and training data), but it's further
+evidence the near-miss pattern isn't specific to one drafter/target pair.
 
 ## Future work
 
@@ -116,7 +90,7 @@ python scripts/run_dflash_topk_recall.py --run-name llama3.1-8b
 python scripts/analyze_dflash_topk_recall.py --run-name llama3.1-8b
 # open results/llama3.1-8b/dflash_topk_recall_report.html (e.g. via VS Code preview)
 
-# second target/drafter pair (see "Results (run: qwen3.5-4b)" above)
+# second target/drafter pair (see "Results" above)
 python scripts/run_dflash_topk_recall.py --run-name qwen3.5-4b \
     --target-path Qwen/Qwen3.5-4B --dflash-checkpoint z-lab/Qwen3.5-4B-DFlash
 python scripts/analyze_dflash_topk_recall.py --run-name qwen3.5-4b
@@ -161,3 +135,12 @@ This directory's own content (scripts, README) is licensed under Apache
 License 2.0 (see `LICENSE`). `vendor/dflash/` is DFlash's own code (MIT
 license, see `vendor/dflash/LICENSE`), with a small instrumentation change
 to `model.py` (`return_topk_recall` option) -- see `NOTICE`.
+
+## Changelog
+
+- Added the `qwen3.5-4b` run (Qwen/Qwen3.5-4B + z-lab/Qwen3.5-4B-DFlash).
+  Its hybrid linear-attention/full-attention backbone needed the target
+  KV-cache to be built with `DynamicCache(config=...)` +
+  `activate_past_recording()` instead of a plain `DynamicCache()`, since the
+  latter can't roll back linear-attention layers after a rejected draft
+  block -- see `NOTICE` and the "Support hybrid-attention targets" commit.
