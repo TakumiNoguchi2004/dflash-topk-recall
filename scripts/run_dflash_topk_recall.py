@@ -28,7 +28,7 @@ for how ranks are computed, and analyze_dflash_topk_recall.py for turning
 per-round rank lists into a recall@k curve.
 
 Usage:
-    python run_dflash_topk_recall.py --run-name v1
+    python run_dflash_topk_recall.py --run-name llama3.1-8b
 """
 import argparse
 import json

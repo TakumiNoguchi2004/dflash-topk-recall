@@ -39,7 +39,7 @@ Emits a CSV and a self-contained HTML report (open via VSCode preview, not
 published) with the recall@k curve.
 
 Usage:
-    python analyze_dflash_topk_recall.py --run-name v1
+    python analyze_dflash_topk_recall.py --run-name llama3.1-8b
 """
 import argparse
 import json

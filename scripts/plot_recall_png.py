@@ -3,7 +3,7 @@ static PNG chart for embedding in README.md (the HTML report already has an
 interactive inline-SVG version; this is just a portable image).
 
 Usage:
-    uv run --with matplotlib python scripts/plot_recall_png.py --run-name v1
+    uv run --with matplotlib python scripts/plot_recall_png.py --run-name llama3.1-8b
 """
 import argparse
 import csv
