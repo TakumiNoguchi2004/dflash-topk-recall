@@ -81,7 +81,14 @@ def dflash_generate(
         (1, max_length + block_size), mask_token_id, dtype=torch.long, device=target.device,
     )
     position_ids = torch.arange(output_ids.shape[1], device=target.device).unsqueeze(0)
-    past_key_values_target = DynamicCache()
+    # config= lets DynamicCache build per-layer-type cache entries up front;
+    # required for hybrid linear-attention/full-attention targets like Qwen3.5,
+    # where a plain DynamicCache() never lazily grows for update_conv_state().
+    past_key_values_target = DynamicCache(config=target.config)
+    # Linear-attention cache layers (e.g. Qwen3.5's hybrid backbone) compress state
+    # irreversibly by default; recording lets us roll back to the accepted prefix
+    # after a rejected draft block, same as the reversible KV-cache layers already do.
+    past_key_values_target.activate_past_recording()
     past_key_values_draft = DynamicCache()
 
     prefill_start = _cuda_time() if return_stats else None
@@ -138,7 +145,12 @@ def dflash_generate(
         output_ids[:, start : start + acceptance_length + 1] = block_output_ids[:, : acceptance_length + 1]
         output_ids[:, start + acceptance_length + 1] = posterior[:, acceptance_length]
         start += acceptance_length + 1
-        past_key_values_target.crop(start)
+        # Positive/absolute crop() is deprecated (and unsupported by linear-attention
+        # layers outright): every round feeds exactly `block_size` tokens, of which
+        # `acceptance_length + 1` are kept, so remove the rest as a negative delta.
+        tokens_to_remove = block_size - (acceptance_length + 1)
+        if tokens_to_remove > 0:
+            past_key_values_target.crop(-tokens_to_remove)
         acceptance_lengths.append(acceptance_length + 1)
 
         if return_topk_recall and block_size > 1:

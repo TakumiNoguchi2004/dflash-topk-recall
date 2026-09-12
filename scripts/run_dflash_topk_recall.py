@@ -37,11 +37,11 @@ import time
 from pathlib import Path
 
 import torch
-from transformers import AutoModel, AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "vendor"))
-from dflash.model import dflash_generate  # noqa: E402
+from dflash.model import DFlashDraftModel, dflash_generate  # noqa: E402
 
 RESULTS_DIR = REPO_ROOT / "results"
 DATA_PATH = REPO_ROOT / "data" / "mtbench_subset.jsonl"
@@ -60,8 +60,11 @@ def run(run_name: str, target_path: str, dflash_checkpoint: str, max_new_tokens:
     target_model = AutoModelForCausalLM.from_pretrained(
         target_path, dtype=torch.bfloat16
     ).to(device).eval()
-    draft_model = AutoModel.from_pretrained(
-        dflash_checkpoint, trust_remote_code=True, dtype=torch.bfloat16
+    # AutoModel(trust_remote_code=True) fails: the HF checkpoint's auto_map points at
+    # "dflash.DFlashDraftModel" but ships no dflash.py of its own to dynamically load.
+    # Use the real class directly instead (imported from vendor/dflash above).
+    draft_model = DFlashDraftModel.from_pretrained(
+        dflash_checkpoint, dtype=torch.bfloat16
     ).to(device).eval()
 
     gamma = draft_model.block_size - 1
@@ -73,9 +76,12 @@ def run(run_name: str, target_path: str, dflash_checkpoint: str, max_new_tokens:
     for record in read_jsonl(DATA_PATH):
         prompt = record["prompt"]
         messages = [{"role": "user", "content": prompt}]
-        input_ids = tokenizer.apply_chat_template(
+        chat_out = tokenizer.apply_chat_template(
             messages, add_generation_prompt=True, return_tensors="pt"
-        ).to(device)
+        )
+        # newer transformers returns a BatchEncoding (dict-like) here instead of a raw Tensor
+        input_ids = chat_out if torch.is_tensor(chat_out) else chat_out["input_ids"]
+        input_ids = input_ids.to(device)
 
         result = dflash_generate(
             draft_model,

@@ -14,9 +14,17 @@ experiment's instrumented drafter:
   MODIFIED from upstream: model.py's dflash_generate() gained an optional
   `return_topk_recall` argument that additionally records, per draft round,
   the rank of the verifier's per-position token within the drafter's own
-  logit ordering at every block position. No other behavior changes; with
-  return_topk_recall left at its default (False), generation is identical
-  to upstream.
+  logit ordering at every block position. With return_topk_recall left at
+  its default (False), generation is otherwise identical to upstream.
+
+  Also MODIFIED: the target's KV-cache is now built with
+  `DynamicCache(config=target.config)` and `activate_past_recording()`
+  enabled, and post-round cropping uses a negative token delta instead of
+  an absolute position. Needed to support hybrid linear-attention/
+  full-attention targets (e.g. Qwen3.5), whose linear-attention cache
+  layers can't be rolled back to an earlier position with a plain
+  `DynamicCache()`. Behavior for pure full-attention targets (e.g.
+  LLaMA-3.1) is unchanged.
 
 data/mtbench_subset.jsonl is a small subset of MT-Bench prompts (prompt
 text only, no third-party generations or annotations).
